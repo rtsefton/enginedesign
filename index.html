@@ -51,9 +51,9 @@
         </p>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <!-- Inputs Section -->
+            <!-- Design Inputs Section -->
             <div class="space-y-4">
-                <h2 class="text-xl font-semibold mb-4 text-blue-700">Input Parameters</h2>
+                <h2 class="text-xl font-semibold mb-4 text-blue-700">Design Parameters</h2>
 
                 <!-- Piston Diameter -->
                 <div class="tooltip-container">
@@ -90,7 +90,7 @@
                     </div>
                     <input type="number" id="displacerStroke" value="120" class="mt-1 block w-full px-3 py-2 border-2 border-blue-500 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-blue-50 sm:text-sm">
                 </div>
-
+                
                 <!-- Hot End Temperature -->
                 <div class="tooltip-container">
                     <label for="hotEndTemp" class="block text-gray-700 font-medium cursor-pointer">Hot End Temperature (K) <span id="hotEndTempF" class="text-xs text-gray-500"></span></label>
@@ -120,11 +120,11 @@
                 
                 <!-- Engine Speed -->
                 <div class="tooltip-container">
-                    <label for="engineSpeed" class="block text-gray-700 font-medium cursor-pointer">Engine Speed (Hz) <span id="engineSpeedRPM" class="text-xs text-gray-500"></span></label>
+                    <label for="engineSpeed" class="block text-gray-700 font-medium cursor-pointer">Engine Speed (Hz) <span id="engineSpeedRPMDisplay" class="text-xs text-gray-500"></span></label>
                     <div class="tooltip-text">
-                        Revolutions per second. This value is used to calculate total power output.
+                        The assumed operating frequency of the engine.
                     </div>
-                    <input type="number" id="engineSpeed" value="5.83" class="mt-1 block w-full px-3 py-2 border-2 border-blue-500 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-blue-50 sm:text-sm">
+                    <input type="number" id="engineSpeed" value="10" class="mt-1 block w-full px-3 py-2 border-2 border-blue-500 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-blue-50 sm:text-sm">
                 </div>
 
                 <!-- Baseline Pressure -->
@@ -152,11 +152,11 @@
                     <h2 class="text-xl font-semibold mb-4 text-green-700">Estimated Outputs (from Schmidt Analysis)</h2>
                     <div class="grid grid-cols-1 gap-4">
                         <div class="p-4 bg-green-50 border-2 border-green-500 rounded-md shadow-sm">
-                            <label class="block text-gray-700 font-medium">Net Power Output (J) per cycle</label>
+                            <label class="block text-gray-700 font-medium">Net Work per Cycle (J)</label>
                             <span id="powerOutputPerCycle" class="text-2xl font-bold text-green-700">0.00</span>
                         </div>
-                        <div class="p-4 bg-green-50 border-2 border-green-500 rounded-md shadow-sm">
-                            <label class="block text-gray-700 font-medium">Net Power (W)</label>
+                         <div class="p-4 bg-green-50 border-2 border-green-500 rounded-md shadow-sm">
+                            <label class="block text-gray-700 font-medium">Net Power Output (W)</label>
                             <span id="totalPowerOutput" class="text-2xl font-bold text-green-700">0.00</span>
                         </div>
                         <div class="p-4 bg-green-50 border-2 border-green-500 rounded-md shadow-sm">
@@ -191,15 +191,13 @@
                             <label class="block text-gray-700 font-medium">Estimated Speed (RPM)</label>
                             <span id="estimatedSpeedRPM" class="text-2xl font-bold text-purple-700">0.00</span>
                         </div>
-                        <button id="updateSpeedButton" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition-colors duration-200">
-                            Auto-Update Speed
-                        </button>
                     </div>
                 </div>
 
                 <!-- Pressure-Volume Curve Graph -->
                 <div>
                     <h2 class="text-xl font-semibold mb-4 text-gray-700">Pressure-Volume Curve</h2>
+                    <p class="text-sm text-gray-500 mt-[-1rem] mb-4">Work from PV Loop Area: <span id="pvLoopAreaDisplay" class="font-medium">0.00 J</span></p>
                     <div class="relative bg-gray-100 rounded-md shadow-inner p-2 h-80">
                         <canvas id="pvCurve" class="border border-gray-300"></canvas>
                     </div>
@@ -230,236 +228,271 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const inputs = document.querySelectorAll('input[type="number"]');
-            const powerOutputPerCycleSpan = document.getElementById('powerOutputPerCycle');
-            const totalPowerOutputSpan = document.getElementById('totalPowerOutput');
-            const maxPressureSpan = document.getElementById('maxPressure');
-            const minPressureSpan = document.getElementById('minPressure');
-            const maxPressurePSISpan = document.getElementById('maxPressurePSI');
-            const minPressurePSISpan = document.getElementById('minPressurePSI');
+            const designInputs = document.querySelectorAll('#pistonDiameter, #pistonStroke, #displacerDiameter, #displacerStroke, #engineSpeed, #hotEndTemp, #coldEndTemp, #deadAirSpace, #baselinePressure, #phaseAngle');
+            const resistiveTorqueInput = document.getElementById('resistiveTorque');
             const pvCurveCanvas = document.getElementById('pvCurve');
-            const pvCurveContext = pvCurveCanvas.getContext('2d');
             const pvTableBody = document.getElementById('pvTableBody');
             
-            // New button for auto-updating speed
-            const updateSpeedButton = document.getElementById('updateSpeedButton');
-            
-            // Initial call to populate the calculator on page load
-            calculateStirling();
+            // Initial calculations on load
+            calculateDesignOutputs();
+            calculateSpeedEstimation();
 
-            // Add event listeners to all input fields
-            inputs.forEach(input => {
-                input.addEventListener('input', calculateStirling);
+            // Event listeners for input changes
+            designInputs.forEach(input => {
+                input.addEventListener('input', () => {
+                    calculateDesignOutputs();
+                    calculateSpeedEstimation();
+                });
             });
+            resistiveTorqueInput.addEventListener('input', calculateSpeedEstimation);
 
-            // Specific listener for the new torque input
-            const resistiveTorqueInput = document.getElementById('resistiveTorque');
-            resistiveTorqueInput.addEventListener('input', calculateStirling);
-            
-            // Event listener for the new button
-            updateSpeedButton.addEventListener('click', autoUpdateSpeed);
-
-            function autoUpdateSpeed() {
-                const engineSpeedInput = document.getElementById('engineSpeed');
-                const estimatedSpeedHzSpan = document.getElementById('estimatedSpeedHz');
-                
-                let currentEngineSpeed = parseFloat(engineSpeedInput.value);
-                let newEstimatedSpeed = parseFloat(estimatedSpeedHzSpan.textContent);
-                
-                // Perform a few iterations to let the values converge
-                for (let i = 0; i < 5; i++) {
-                    engineSpeedInput.value = newEstimatedSpeed;
-                    calculateStirling();
-                    newEstimatedSpeed = parseFloat(estimatedSpeedHzSpan.textContent);
-                }
-            }
-
-            function calculateStirling() {
+            /**
+             * Performs the core Schmidt analysis calculations and updates the UI.
+             * This function calculates work per cycle, power output, and generates data for the PV curve.
+             */
+            function calculateDesignOutputs() {
                 try {
-                    // 1. Get Input Values
+                    // Get all input values from the form
                     const d_p = parseFloat(document.getElementById('pistonDiameter').value);
                     const s_p = parseFloat(document.getElementById('pistonStroke').value);
                     const d_d = parseFloat(document.getElementById('displacerDiameter').value);
                     const s_d = parseFloat(document.getElementById('displacerStroke').value);
+                    const engineSpeedHz = parseFloat(document.getElementById('engineSpeed').value);
                     const t_h = parseFloat(document.getElementById('hotEndTemp').value);
                     const t_c = parseFloat(document.getElementById('coldEndTemp').value);
                     const v_dead = parseFloat(document.getElementById('deadAirSpace').value);
-                    const n_freq = parseFloat(document.getElementById('engineSpeed').value);
                     const p_base = parseFloat(document.getElementById('baselinePressure').value);
                     const alpha_deg = parseFloat(document.getElementById('phaseAngle').value);
-                    const resistiveTorque = parseFloat(document.getElementById('resistiveTorque').value);
 
-                    // 2. Intermediate Calculations (Schmidt Analysis)
-                    const v_sp = Math.PI * Math.pow(d_p / 2, 2) * s_p;
-                    const v_sd = Math.PI * Math.pow(d_d / 2, 2) * s_d;
-                    
-                    const tau = t_c / t_h;
-                    const v_ratio = v_sd / v_sp;
-                    const dead_ratio = v_dead / v_sp;
+                    // --- Core Schmidt Analysis Calculations ---
+                    // Calculate the swept volumes for the piston and displacer
+                    const v_swept_p = Math.PI * Math.pow(d_p / 2, 2) * s_p;
+                    const v_swept_d = Math.PI * Math.pow(d_d / 2, 2) * s_d;
                     const alpha_rad = alpha_deg * (Math.PI / 180);
+                    const tau = t_c / t_h; // Temperature ratio
 
-                    const x = (1 / (1 + dead_ratio + tau * dead_ratio)) * Math.sqrt(
-                        Math.pow(tau + v_ratio * Math.cos(alpha_rad), 2) + Math.pow(v_ratio * Math.sin(alpha_rad), 2)
-                    );
-
-                    const p_max_ratio = (1 + x) / (1 - x);
+                    // The ratio of displacer swept volume to piston swept volume
+                    const S = v_swept_d / v_swept_p;
                     
-                    // 3. Main Output Calculations
-                    const p_min = (2 * p_base) / (1 + p_max_ratio);
-                    const p_max = p_min * p_max_ratio;
+                    // Dead volume ratio
+                    const K = v_dead / v_swept_p;
                     
-                    // Work per cycle in Joules (J), which is power per cycle
-                    const workPerCycle = (p_max - p_min) * v_sp / (2 * 1e9); // 1e9 for mm^3 to m^3 conversion
+                    // The 'delta' parameter, a key intermediate value in Schmidt analysis
+                    // This determines the amplitude of the pressure variation
+                    const C1 = Math.sqrt(S * S + tau * tau + 2 * S * tau * Math.cos(alpha_rad));
+                    const C2 = 1 + S + 2 * tau * K;
+                    const delta = C1 / C2;
                     
-                    // Total power in Watts (W) = Joules per second
-                    // This is the power output AT THE GIVEN ENGINE SPEED
-                    const totalPower = workPerCycle * n_freq;
-
-                    // Pressure conversion to PSI (1 PSI = 6894.76 Pa)
-                    const p_min_psi = p_min / 6894.76;
-                    const p_max_psi = p_max / 6894.76;
-
-                    // 4. Update the main output spans
-                    powerOutputPerCycleSpan.textContent = totalPower > 0 ? workPerCycle.toFixed(4) : "0.00";
-                    totalPowerOutputSpan.textContent = totalPower > 0 ? totalPower.toFixed(2) : "0.00";
-                    maxPressureSpan.textContent = p_max.toFixed(2) + ' Pa';
-                    maxPressurePSISpan.textContent = '(' + p_max_psi.toFixed(2) + ' PSI)';
-                    minPressureSpan.textContent = p_min.toFixed(2) + ' Pa';
-                    minPressurePSISpan.textContent = '(' + p_min_psi.toFixed(2) + ' PSI)';
-
-                    // 5. Speed Estimation Analysis
-                    const estimatedSpeedHzSpan = document.getElementById('estimatedSpeedHz');
-                    const estimatedSpeedRPMSpan = document.getElementById('estimatedSpeedRPM');
+                    // The 'beta' parameter, the phase angle of the pressure variation
+                    // This formula is correct for the displacer leading the piston
+                    const beta = Math.atan2(S * Math.sin(alpha_rad), S * Math.cos(alpha_rad) + tau);
                     
-                    let estimatedHz = 0;
-                    let estimatedRPM = 0;
+                    // The work per cycle is a function of the phase difference, temperature ratio, and swept volumes.
+                    const workPerCycle_analytical = Math.PI * p_base * v_swept_p * delta * Math.sin(beta);
+
+                    // Calculate max and min pressure from the Schmidt formula
+                    const p_max = p_base * Math.sqrt((1 + delta) / (1 - delta));
+                    const p_min = p_base * Math.sqrt((1 - delta) / (1 + delta));
                     
-                    // Calculate the engine speed where totalPower = resistiveTorque * angularVelocity
-                    if (resistiveTorque > 0 && totalPower > 0) {
-                        const angularVelocity_rad_per_s = totalPower / resistiveTorque;
-                        estimatedHz = angularVelocity_rad_per_s / (2 * Math.PI);
-                        estimatedRPM = estimatedHz * 60;
-                    }
-
-                    estimatedSpeedHzSpan.textContent = estimatedHz > 0 ? estimatedHz.toFixed(2) : "0.00";
-                    estimatedSpeedRPMSpan.textContent = estimatedRPM > 0 ? estimatedRPM.toFixed(0) : "0.00";
-
-
-                    // 6. Convert and update US units for inputs
+                    // Unit conversion factors
                     const in_per_mm = 1 / 25.4;
                     const f_per_k = 9/5;
-                    const c_to_f_offset = -459.67; // -273.15 * 9/5 + 32
+                    const k_to_f_offset = -459.67;
                     const psi_per_pa = 1 / 6894.76;
-                    
+
+                    // Update output displays
+                    document.getElementById('maxPressure').textContent = p_max.toFixed(2) + ' Pa';
+                    document.getElementById('maxPressurePSI').textContent = '(' + (p_max / 6894.76).toFixed(2) + ' PSI)';
+                    document.getElementById('minPressure').textContent = p_min.toFixed(2) + ' Pa';
+                    document.getElementById('minPressurePSI').textContent = '(' + (p_min / 6894.76).toFixed(2) + ' PSI)';
+
+                    // Update unit conversions for labels
                     document.getElementById('pistonDiameterIn').textContent = '(' + (d_p * in_per_mm).toFixed(2) + ' in)';
                     document.getElementById('pistonStrokeIn').textContent = '(' + (s_p * in_per_mm).toFixed(2) + ' in)';
                     document.getElementById('displacerDiameterIn').textContent = '(' + (d_d * in_per_mm).toFixed(2) + ' in)';
                     document.getElementById('displacerStrokeIn').textContent = '(' + (s_d * in_per_mm).toFixed(2) + ' in)';
-                    document.getElementById('hotEndTempF').textContent = '(' + (t_h * f_per_k + c_to_f_offset).toFixed(0) + ' °F)';
-                    document.getElementById('coldEndTempF').textContent = '(' + (t_c * f_per_k + c_to_f_offset).toFixed(0) + ' °F)';
+                    document.getElementById('hotEndTempF').textContent = '(' + (t_h * f_per_k + k_to_f_offset).toFixed(0) + ' °F)';
+                    document.getElementById('coldEndTempF').textContent = '(' + (t_c * f_per_k + k_to_f_offset).toFixed(0) + ' °F)';
                     document.getElementById('deadAirSpaceIn3').textContent = '(' + (v_dead * Math.pow(in_per_mm, 3)).toFixed(2) + ' in³)';
-                    document.getElementById('engineSpeedRPM').textContent = '(' + (n_freq * 60).toFixed(0) + ' RPM)';
                     document.getElementById('baselinePressurePSI').textContent = '(' + (p_base * psi_per_pa).toFixed(2) + ' PSI)';
-                    
-                    // 7. Generate data for P-V curve and table
-                    pvTableBody.innerHTML = ''; // Clear previous table data
-                    
-                    let minTotalVolume = Infinity;
-                    let maxTotalVolume = -Infinity;
-                    let minPressure = Infinity;
-                    let maxPressure = -Infinity;
+                    document.getElementById('engineSpeedRPMDisplay').textContent = '(' + (engineSpeedHz * 60).toFixed(0) + ' RPM)';
 
-                    // Store all calculated points to find min/max for scaling the graph
+                    // Clear the table before repopulating
+                    pvTableBody.innerHTML = '';
+                    
                     const allPoints = [];
 
-                    for (let angle = 0; angle <= 360; angle += 10) {
+                    // Using 361 points (0-360 degrees) for high-precision area calculation and smooth curve
+                    for (let angle = 0; angle <= 360; angle += 1) {
                         const angle_rad = angle * (Math.PI / 180);
                         
-                        const v_p = (v_sp / 2) * (1 - Math.cos(angle_rad));
-                        const v_d = (v_sd / 2) * (1 - Math.cos(angle_rad + alpha_rad));
+                        // Calculate instantaneous piston and displacer volumes.
+                        const v_p = (v_swept_p / 2) * (1 - Math.cos(angle_rad));
+                        const v_d = (v_swept_d / 2) * (1 - Math.cos(angle_rad + alpha_rad));
+                        // Total instantaneous volume is the sum of dead volume and instantaneous swept volumes
                         const v_total = v_dead + v_p + v_d;
                         
-                        // Pressure calculation from Schmidt's analysis
-                        const p_schmidt_numerator = p_base * (v_sp + v_sd + v_dead);
-                        const p_schmidt_denominator = (v_sp/2)*(1-Math.cos(angle_rad)) + (v_sd/2)*(1-Math.cos(angle_rad+alpha_rad)) + v_dead;
-                        const p_schmidt = p_schmidt_numerator / p_schmidt_denominator;
-                        const p_schmidt_psi = p_schmidt / 6894.76;
+                        // Calculate instantaneous pressure using the Schmidt analysis formula.
+                        const p_schmidt = p_base * Math.sqrt(1 - delta*delta) / (1 + delta * Math.cos(angle_rad - beta));
                         
-                        allPoints.push({volume: v_total, pressure: p_schmidt});
+                        allPoints.push({ volume: v_total, pressure: p_schmidt });
 
-                        // Update min/max for graph scaling
-                        minTotalVolume = Math.min(minTotalVolume, v_total);
-                        maxTotalVolume = Math.max(maxTotalVolume, v_total);
-                        minPressure = Math.min(minPressure, p_schmidt);
-                        maxPressure = Math.max(maxPressure, p_schmidt);
-
-                        // Add to table
-                        const row = pvTableBody.insertRow();
-                        row.innerHTML = `
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${angle}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${v_total.toFixed(2)}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${p_schmidt.toFixed(2)}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${p_schmidt_psi.toFixed(2)}</td>
-                        `;
+                        // Add a row to the table only for every 10 degrees to keep it readable
+                        if (angle % 10 === 0) {
+                            const p_schmidt_psi = p_schmidt / 6894.76;
+                            const row = pvTableBody.insertRow();
+                            row.innerHTML = `
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${angle}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${v_total.toFixed(2)}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${p_schmidt.toFixed(2)}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${p_schmidt_psi.toFixed(2)}</td>
+                            `;
+                        }
                     }
+                    
+                    // Calculate the area of the PV loop using the Shoelace formula, which is a numerical integration
+                    let area = 0;
+                    for (let i = 0; i < allPoints.length - 1; i++) {
+                        area += (allPoints[i].volume * allPoints[i+1].pressure) - (allPoints[i+1].volume * allPoints[i].pressure);
+                    }
+                    // Close the loop for the final calculation
+                    area += (allPoints[allPoints.length-1].volume * allPoints[0].pressure) - (allPoints[0].volume * allPoints[allPoints.length-1].pressure);
+                    const workPerCycle_numerical = Math.abs(area / 2);
+                    const workPerCycle_J = workPerCycle_numerical / 1e9; // Convert from Pa*mm^3 to Joules
 
-                    // 8. Draw the P-V Curve
+                    // The analytical value is the source of truth, the numerical is for confirmation
+                    const finalWorkPerCycle = workPerCycle_analytical / 1e9;
+                    document.getElementById('powerOutputPerCycle').textContent = finalWorkPerCycle.toFixed(4) + ' J';
+                    document.getElementById('pvLoopAreaDisplay').textContent = (workPerCycle_numerical / 1e9).toFixed(4) + ' J';
+                    document.getElementById('totalPowerOutput').textContent = (finalWorkPerCycle * engineSpeedHz).toFixed(2) + ' W';
+                    
+                    // Store the analytical work per cycle for the speed estimation function
+                    pvCurveCanvas.dataset.workPerCycle = workPerCycle_analytical;
+
+                    // Draw the PV curve on the canvas
+                    const pvCurveContext = pvCurveCanvas.getContext('2d');
                     pvCurveCanvas.width = pvCurveCanvas.offsetWidth;
                     pvCurveCanvas.height = pvCurveCanvas.offsetHeight;
-                    
                     pvCurveContext.clearRect(0, 0, pvCurveCanvas.width, pvCurveCanvas.height);
                     
-                    const padding = 30; // Padding for the graph
-                    const scaleX = (pvCurveCanvas.width - 2 * padding) / (maxTotalVolume - minTotalVolume);
+                    if (allPoints.length === 0) {
+                        pvCurveContext.textAlign = 'center';
+                        pvCurveContext.fillStyle = '#ef4444';
+                        pvCurveContext.font = '16px Arial';
+                        pvCurveContext.fillText('No data to plot. Check input values.', pvCurveCanvas.width / 2, pvCurveCanvas.height / 2);
+                        return;
+                    }
+
+                    const padding = 40;
+                    const minVolume = Math.min(...allPoints.map(p => p.volume));
+                    const maxVolume = Math.max(...allPoints.map(p => p.volume));
+                    const minPressure = Math.min(...allPoints.map(p => p.pressure));
+                    const maxPressure = Math.max(...allPoints.map(p => p.pressure));
+
+                    if (maxVolume <= minVolume || maxPressure <= minPressure) {
+                        pvCurveContext.textAlign = 'center';
+                        pvCurveContext.fillStyle = '#ef4444';
+                        pvCurveContext.font = '16px Arial';
+                        pvCurveContext.fillText('Invalid parameters for graph.', pvCurveCanvas.width / 2, pvCurveCanvas.height / 2);
+                        return;
+                    }
+
+                    const scaleX = (pvCurveCanvas.width - 2 * padding) / (maxVolume - minVolume);
                     const scaleY = (pvCurveCanvas.height - 2 * padding) / (maxPressure - minPressure);
 
                     pvCurveContext.beginPath();
+                    // Move to the first point
+                    pvCurveContext.moveTo(
+                        padding + (allPoints[0].volume - minVolume) * scaleX,
+                        pvCurveCanvas.height - padding - (allPoints[0].pressure - minPressure) * scaleY
+                    );
+                    
+                    // Draw lines to all other points
+                    for (let i = 1; i < allPoints.length; i++) {
+                        const point = allPoints[i];
+                        const x = padding + (point.volume - minVolume) * scaleX;
+                        const y = pvCurveCanvas.height - padding - (point.pressure - minPressure) * scaleY;
+                        pvCurveContext.lineTo(x, y);
+                    }
+                    
+                    // Explicitly draw a line from the last point to the first to guarantee the loop is closed
+                    const firstX = padding + (allPoints[0].volume - minVolume) * scaleX;
+                    const firstY = pvCurveCanvas.height - padding - (allPoints[0].pressure - minPressure) * scaleY;
+                    pvCurveContext.lineTo(firstX, firstY);
+
                     pvCurveContext.strokeStyle = '#3b82f6';
                     pvCurveContext.lineWidth = 2;
-                    
-                    allPoints.forEach((point, index) => {
-                        const x = padding + (point.volume - minTotalVolume) * scaleX;
-                        const y = pvCurveCanvas.height - padding - (point.pressure - minPressure) * scaleY;
-                        
-                        if (index === 0) {
-                            pvCurveContext.moveTo(x, y);
-                        } else {
-                            pvCurveContext.lineTo(x, y);
-                        }
-                    });
-
-                    pvCurveContext.closePath();
                     pvCurveContext.stroke();
-                    
-                    // Draw axis labels
+
+                    // Draw a red dot to mark the start of the cycle
+                    pvCurveContext.fillStyle = '#ef4444';
+                    pvCurveContext.beginPath();
+                    pvCurveContext.arc(firstX, firstY, 3, 0, 2 * Math.PI);
+                    pvCurveContext.fill();
+
+                    // Draw axes and labels
                     pvCurveContext.fillStyle = '#6b7280';
                     pvCurveContext.font = '10px Arial';
                     
-                    // Y-axis Label
                     pvCurveContext.save();
                     pvCurveContext.translate(10, pvCurveCanvas.height / 2);
                     pvCurveContext.rotate(-Math.PI / 2);
                     pvCurveContext.fillText('Pressure (Pa)', 0, 0);
                     pvCurveContext.restore();
-
-                    // X-axis Label
-                    pvCurveContext.textAlign = 'center';
-                    pvCurveContext.fillText('Volume (mm³)', pvCurveCanvas.width / 2, pvCurveCanvas.height - 5);
                     
-                    // Y-axis min/max
+                    pvCurveContext.textAlign = 'center';
+                    pvCurveContext.fillText('Volume ($mm^3$)', pvCurveCanvas.width / 2, pvCurveCanvas.height - 5);
+                    
                     pvCurveContext.textAlign = 'right';
                     pvCurveContext.fillText(minPressure.toFixed(0), padding - 5, pvCurveCanvas.height - padding + 5);
                     pvCurveContext.fillText(maxPressure.toFixed(0), padding - 5, padding + 5);
-
-                    // X-axis min/max
                     pvCurveContext.textAlign = 'center';
-                    pvCurveContext.fillText(minTotalVolume.toFixed(0), padding, pvCurveCanvas.height - padding + 15);
-                    pvCurveContext.fillText(maxTotalVolume.toFixed(0), pvCurveCanvas.width - padding, pvCurveCanvas.height - padding + 15);
-
+                    pvCurveContext.fillText(minVolume.toFixed(0), padding, pvCurveCanvas.height - padding + 15);
+                    pvCurveContext.fillText(maxVolume.toFixed(0), pvCurveCanvas.width - padding, pvCurveCanvas.height - padding + 15);
                 } catch (error) {
-                    console.error("Calculation Error:", error);
-                    // You could display an error message to the user here
+                    console.error("Calculation or Drawing Error:", error);
+                    const pvCurveContext = pvCurveCanvas.getContext('2d');
+                    pvCurveContext.clearRect(0, 0, pvCurveCanvas.width, pvCurveCanvas.height);
+                    pvCurveContext.textAlign = 'center';
+                    pvCurveContext.fillStyle = '#ef4444';
+                    pvCurveContext.font = '16px Arial';
+                    pvCurveContext.fillText('An error occurred. Check input values.', pvCurveCanvas.width / 2, pvCurveCanvas.height / 2);
                 }
+            }
+
+            /**
+             * Estimates the engine speed based on the work per cycle and resistive torque.
+             * This is a simplified calculation for illustrative purposes.
+             */
+            function calculateSpeedEstimation() {
+                // Get the work per cycle from the canvas dataset (the numerically integrated value)
+                const workPerCycle = parseFloat(pvCurveCanvas.dataset.workPerCycle) || 0;
+                const resistiveTorque = parseFloat(document.getElementById('resistiveTorque').value);
+                const estimatedSpeedHzSpan = document.getElementById('estimatedSpeedHz');
+                const estimatedSpeedRPMSpan = document.getElementById('estimatedSpeedRPM');
+                
+                let estimatedHz = 0;
+                let estimatedRPM = 0;
+
+                if (resistiveTorque > 0 && workPerCycle > 0) {
+                    // Convert work per cycle from Pa*mm^3 to Joules by dividing by 1e9.
+                    let workInJoules = workPerCycle / 1e9;
+                    
+                    if (resistiveTorque > 0) {
+                        // This calculation assumes the power output (P) balances the resistive load (T) at a given frequency (f).
+                        // P = T * angular_velocity, where angular_velocity = 2 * PI * f.
+                        // Power is also P = workInJoules * f.
+                        // Therefore, T * 2 * PI * f = workInJoules * f, which simplifies to T * 2 * PI = workInJoules.
+                        // The estimated speed is the frequency at which the engine's power output equals the load power.
+                        // It's a heuristic, as engine power often isn't constant with speed.
+                        let estimatedHzForBalance = workInJoules / (resistiveTorque * 2 * Math.PI);
+                        estimatedHz = estimatedHzForBalance;
+                    }
+                    estimatedRPM = estimatedHz * 60;
+                }
+
+                estimatedSpeedHzSpan.textContent = estimatedHz > 0 ? estimatedHz.toFixed(2) : "0.00";
+                estimatedSpeedRPMSpan.textContent = estimatedRPM > 0 ? estimatedRPM.toFixed(0) : "0.00";
             }
         });
     </script>
